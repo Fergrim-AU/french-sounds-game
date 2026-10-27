@@ -2,6 +2,7 @@ const http = require("http"), fs = require("fs"), path = require("path"), crypto
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
+const NCARDS = 96, NBONUS = 24;
 const PAGE_FILE = [path.join(__dirname, "index.html"), path.join(__dirname, "public", "index.html")].find(f => fs.existsSync(f));
 if (!PAGE_FILE) { console.error("Не найден файл index.html рядом с server.js. Загрузите его в репозиторий."); process.exit(1); }
 const PAGE = fs.readFileSync(PAGE_FILE);
@@ -23,6 +24,7 @@ function broadcast(s) {
   s.touched = Date.now();
   const msg = JSON.stringify({ t: "state", state: {
     status: s.status,
+    bonusOn: s.bonus,
     deckN: s.deck.length,
     top: s.deck.length ? s.deck[s.deck.length - 1] : null,
     center: s.center,
@@ -51,7 +53,7 @@ function handle(ws, m) {
       let code = null;
       for (let i = 0; i < 50 && !code; i++) { const x = String(1000 + crypto.randomInt(9000)); if (!sessions.has(x)) code = x; }
       if (!code) return fail(ws, "Нет свободных кодов, попробуйте позже.");
-      const ns = { code, hostTok: token(), status: "lobby", deck: [], center: [], players: new Map(), conns: new Set(), seq: 0, touched: Date.now() };
+      const ns = { code, bonus: m.bonus !== false, hostTok: token(), status: "lobby", deck: [], center: [], players: new Map(), conns: new Set(), seq: 0, touched: Date.now() };
       sessions.set(code, ns);
       attach(ws, ns, "host", "host", ns.hostTok);
       return broadcast(ns);
@@ -79,10 +81,9 @@ function handle(ws, m) {
     case "start": {
       if (!s || c.role !== "host" || s.status !== "lobby") return;
       const n = s.players.size;
-      if (n < 2 || n > 10) return;
-      const k = Math.ceil((3 * n + 14) / 8);
-      s.deck = shuf(Array.from({ length: 8 * k }, (_, i) => i));
-      for (const p of s.players.values()) { p.cards = [s.deck.pop(), s.deck.pop(), s.deck.pop()]; p.bonus = crypto.randomInt(8); }
+      if (n < 1 || n > 10) return;
+      s.deck = shuf(Array.from({ length: NCARDS }, (_, i) => i));
+      for (const p of s.players.values()) { p.cards = [s.deck.pop(), s.deck.pop(), s.deck.pop()]; p.bonus = s.bonus ? crypto.randomInt(NBONUS) : null; }
       s.center = [s.deck.pop(), s.deck.pop()];
       s.status = "playing";
       return broadcast(s);
