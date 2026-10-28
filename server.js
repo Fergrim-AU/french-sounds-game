@@ -2,7 +2,7 @@ const http = require("http"), fs = require("fs"), path = require("path"), crypto
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
-const NCARDS = 96, NBONUS = 24;
+const NCARDS = 96, NBONUS = 24, NCENTER = 4;
 const PAGE_FILE = [path.join(__dirname, "index.html"), path.join(__dirname, "public", "index.html")].find(f => fs.existsSync(f));
 if (!PAGE_FILE) { console.error("Не найден файл index.html рядом с server.js. Загрузите его в репозиторий."); process.exit(1); }
 const PAGE = fs.readFileSync(PAGE_FILE);
@@ -84,7 +84,7 @@ function handle(ws, m) {
       if (n < 1 || n > 10) return;
       s.deck = shuf(Array.from({ length: NCARDS }, (_, i) => i));
       for (const p of s.players.values()) { p.cards = [s.deck.pop(), s.deck.pop(), s.deck.pop()]; p.bonus = s.bonus ? crypto.randomInt(NBONUS) : null; }
-      s.center = [s.deck.pop(), s.deck.pop()];
+      s.center = Array.from({ length: NCENTER }, () => s.deck.pop());
       s.status = "playing";
       return broadcast(s);
     }
@@ -94,7 +94,7 @@ function handle(ws, m) {
       if (!p) return;
       let card;
       if (m.sel === "deck") { if (!s.deck.length) return; card = s.deck.pop(); }
-      else if (m.sel === 0 || m.sel === 1) {
+      else if (Number.isInteger(m.sel) && m.sel >= 0) {
         if (m.sel >= s.center.length) return;
         card = s.center[m.sel];
         if (s.deck.length) s.center[m.sel] = s.deck.pop(); else s.center.splice(m.sel, 1);
